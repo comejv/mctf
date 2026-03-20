@@ -22,6 +22,23 @@
     - Penalty for being tagged.
     - Small step penalty.
 - **Results**:
-  - SPS: TBD
-  - Episode Return (Dense): TBD
-  - Flags Captured: TBD
+  - SPS: ~80k
+  - Episode Return (Dense): ~-0.047
+  - Flags Captured: 0
+
+## Iteration 2: Larger Network & Refined Rewards
+- **Date**: 2026-03-20
+- **Environment**: `puffer_ctf`
+- **Total Timesteps**: 5,000,000
+- **Changes**:
+  - Modified `RewardWrapper` to use edge-triggered penalty for tagging (`-0.5`).
+  - Tuned distance reward scales.
+  - Increased `MLPPolicy` network size to `[256, 256]` with `ReLU` activations.
+- **Results**:
+  - SPS: ~60k (slower due to larger network)
+  - Episode Return (Dense): ~-0.188 (mostly step penalties, some positive distance reward)
+  - Flags Captured: 0
+
+## Iteration 3: Recurrent Policy (LSTM)
+- **Goal**: Enable memory so agents can better navigate and remember tagging cooldowns/opponents out of sight.
+

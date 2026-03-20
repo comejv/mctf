@@ -23,6 +23,7 @@ dependencies = [
     "opencv-python-headless",
     "pygame",
     "setuptools",
+    "pkg-resources",
 ]
 
 [tool.uv.sources]

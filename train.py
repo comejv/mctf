@@ -10,6 +10,21 @@ from env import make_env
 from policy import MLPPolicy
 
 
+class TensorboardLogger:
+    def __init__(self, config, run_id):
+        from torch.utils.tensorboard import SummaryWriter
+        self.run_id = run_id
+        self.writer = SummaryWriter(os.path.join(config["data_dir"], f"tensorboard_{run_id}"))
+
+    def log(self, stats):
+        step = stats.pop("global_step", None)
+        if step is None:
+            return
+
+        for k, v in stats.items():
+            if isinstance(v, (int, float, np.float32, np.int64)):
+                self.writer.add_scalar(k, v, step)
+
 def train():
     # Load config using PufferLib helper
     config = load_config_file("config.ini")
@@ -33,17 +48,22 @@ def train():
     policy.to(train_config["device"])
 
     # Setup Logger
-    if config["wandb"]:
+    run_id = f"{env_name}_{int(time.time())}"
+    if config.get("wandb"):
         from pufferlib.pufferl import WandbLogger
-
         logger = WandbLogger(train_config)
     else:
-        from pufferlib.pufferl import NoLogger
-
-        logger = NoLogger(train_config)
+        # Default to our Tensorboard logger
+        logger = TensorboardLogger(train_config, run_id)
 
     # Initialize trainer
-    trainer = PuffeRL(config=train_config, vecenv=env, policy=policy, logger=logger)
+    trainer = PuffeRL(
+        config=train_config,
+        vecenv=env,
+        policy=policy,
+        logger=logger
+    )
+
 
     # Training loop
     print(

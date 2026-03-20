@@ -34,8 +34,9 @@ class RewardWrapper:
             has_flag = obs[i, 17]
             is_tagged = obs[i, 20]
 
-            step_count = infos[0].get("step", 0)
-            if step_count > 1:  # only if not first step
+            step_count = infos[0].get('step', 0) if len(infos) > 0 else 0
+            if step_count > 1: # only if not first step
+
                 if has_flag == 0:
                     # Reward for moving towards enemy home
                     diff = self.prev_dist_to_enemy_home[i] - dist_to_enemy_home
@@ -61,6 +62,8 @@ class RewardWrapper:
         return obs, new_rewards, terminals, truncations, infos
 
     def reset(self, seed=None):
+        if seed is None:
+            seed = 0
         obs, infos = self.env.reset(seed=seed)
         self.prev_dist_to_enemy_home = obs[:, 1].copy()
         self.prev_dist_to_own_home = obs[:, 3].copy()

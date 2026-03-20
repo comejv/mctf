@@ -35,6 +35,17 @@ cd ../APM_5DA01_TP/05-pufferquaticus/
 
 ## Usage
 
+### Monitoring with Tensorboard
+
+This project logs training progress to Tensorboard. To view the logs:
+
+```bash
+# In a separate terminal
+tensorboard --logdir experiments/
+```
+
+Then open http://localhost:6006 in your browser.
+
 ### Training
 
 To start training with the default `puffer_ctf` (fast C implementation):
