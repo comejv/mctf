@@ -2,3 +2,8 @@
 experiments/
 __pycache__/
 *.pt
+build/
+raylib-*/
+box2d-*/
+*.so
+.ipynb_checkpoints/
