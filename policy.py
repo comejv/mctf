@@ -3,6 +3,7 @@ import torch.nn as nn
 import numpy as np
 import gymnasium
 import pufferlib.pytorch
+import pufferlib.models
 
 
 class MLPPolicy(nn.Module):
@@ -39,6 +40,7 @@ class MLPPolicy(nn.Module):
 
         # Critic head: hidden -> value estimate
         self.critic = pufferlib.pytorch.layer_init(nn.Linear(hidden_size, 1), std=1.0)
+        self.is_continuous = False
 
     def forward_eval(self, observations, state=None):
         hidden = self.encode_observations(observations)
@@ -49,22 +51,14 @@ class MLPPolicy(nn.Module):
         return self.forward_eval(observations, state)
 
     def encode_observations(self, observations, state=None):
-        # observations might have shape (batch, obs_size) or (batch, 1, obs_size) or (batch, horizon, obs_size)
-        # We need to flatten everything except the batch dimension
         batch_size = observations.shape[0]
-        # Reshape to (batch_size, obs_size)
-        # Using view or reshape to ensure it matches the linear layer's expectation
         x = observations.reshape(batch_size, -1)
-        # Check if the shape matches
         if x.shape[1] != self.obs_size:
-            # If it's still not matching, maybe it's (batch, horizon, ...) and we need (batch*horizon, ...)
-            # But PuffeRL should have flattened it. Let's be robust.
             x = observations.view(-1, self.obs_size)
 
         return self.encoder(x.float())
 
     def decode_actions(self, hidden):
-        # hidden shape: (batch, hidden_size)
         if self.is_multidiscrete:
             logits = self.actor(hidden).split(self.action_nvec, dim=1)
         else:
@@ -72,3 +66,10 @@ class MLPPolicy(nn.Module):
 
         value = self.critic(hidden)
         return logits, value.squeeze(-1)
+
+
+class RecurrentPolicy(pufferlib.models.LSTMWrapper):
+    def __init__(self, env, hidden_size=256):
+        policy = MLPPolicy(env, hidden_size)
+        super().__init__(env, policy, input_size=hidden_size, hidden_size=hidden_size)
+        self.rnn_size = hidden_size

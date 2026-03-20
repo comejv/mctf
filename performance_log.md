@@ -40,5 +40,15 @@
   - Flags Captured: 0
 
 ## Iteration 3: Recurrent Policy (LSTM)
-- **Goal**: Enable memory so agents can better navigate and remember tagging cooldowns/opponents out of sight.
+- **Date**: 2026-03-20
+- **Environment**: `puffer_ctf`
+- **Total Timesteps**: 15,000,000
+- **Changes**:
+  - Switched to `RecurrentPolicy` (LSTM wrapper around 256-unit MLP).
+  - Increased `total_timesteps` to 15M.
+  - Adjusted `gamma` to 0.995 and `learning_rate` to 0.005 for longer horizon and stability.
+- **Results**:
+  - SPS: ~17k (much slower due to LSTM overhead)
+  - Episode Return (Dense): TBD
+  - Flags Captured: TBD
 

@@ -34,8 +34,8 @@ class RewardWrapper:
             has_flag = obs[i, 17]
             is_tagged = obs[i, 20]
 
-            step_count = infos[0].get('step', 0) if len(infos) > 0 else 0
-            if step_count > 1: # only if not first step
+            step_count = infos[0].get("step", 0) if len(infos) > 0 else 0
+            if step_count > 1:  # only if not first step
 
                 if has_flag == 0:
                     # Reward for moving towards enemy home
