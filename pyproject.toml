@@ -1,0 +1,36 @@
+[project]
+name = "puffer-mas"
+version = "0.1.0"
+description = "APM_5DA01 project"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pyquaticus",
+    "pufferlib",
+    "torch",
+    "gymnasium==1.2.3",
+    "pettingzoo>=1.25.0",
+    "tensorboard",
+    "moviepy",
+    "pyglet",
+    "numpy",
+    "pyyaml",
+    "scipy",
+    "shapely",
+    "sympy",
+    "contextily",
+    "matplotlib",
+    "opencv-python-headless",
+    "pygame",
+    "setuptools",
+]
+
+[tool.uv.sources]
+pyquaticus = { path = "../pyquaticus" }
+pufferlib = { path = "../APM_5DA01_TP/05-pufferquaticus" }
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
