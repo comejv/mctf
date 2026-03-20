@@ -4,17 +4,20 @@ import numpy as np
 import gymnasium
 import pufferlib.pytorch
 
+
 class MLPPolicy(nn.Module):
-    def __init__(self, env, hidden_size=128):
+    def __init__(self, env, hidden_size=256):
         super().__init__()
         self.hidden_size = hidden_size
-        
+
         # Observation space info
         obs_shape = env.single_observation_space.shape
         self.obs_size = np.prod(obs_shape)
-        
+
         # Action space info
-        self.is_multidiscrete = isinstance(env.single_action_space, gymnasium.spaces.MultiDiscrete)
+        self.is_multidiscrete = isinstance(
+            env.single_action_space, gymnasium.spaces.MultiDiscrete
+        )
         if self.is_multidiscrete:
             self.action_nvec = tuple(env.single_action_space.nvec)
             num_actions = sum(self.action_nvec)
@@ -24,20 +27,18 @@ class MLPPolicy(nn.Module):
         # Encoder: raw observations -> hidden representation
         self.encoder = nn.Sequential(
             pufferlib.pytorch.layer_init(nn.Linear(self.obs_size, hidden_size)),
-            nn.Tanh(),
+            nn.ReLU(),
             pufferlib.pytorch.layer_init(nn.Linear(hidden_size, hidden_size)),
-            nn.Tanh(),
+            nn.ReLU(),
         )
-        
+
         # Actor head: hidden -> action logits
         self.actor = pufferlib.pytorch.layer_init(
             nn.Linear(hidden_size, num_actions), std=0.01
         )
-        
+
         # Critic head: hidden -> value estimate
-        self.critic = pufferlib.pytorch.layer_init(
-            nn.Linear(hidden_size, 1), std=1.0
-        )
+        self.critic = pufferlib.pytorch.layer_init(nn.Linear(hidden_size, 1), std=1.0)
 
     def forward_eval(self, observations, state=None):
         hidden = self.encode_observations(observations)
@@ -59,7 +60,7 @@ class MLPPolicy(nn.Module):
             # If it's still not matching, maybe it's (batch, horizon, ...) and we need (batch*horizon, ...)
             # But PuffeRL should have flattened it. Let's be robust.
             x = observations.view(-1, self.obs_size)
-        
+
         return self.encoder(x.float())
 
     def decode_actions(self, hidden):
@@ -68,6 +69,6 @@ class MLPPolicy(nn.Module):
             logits = self.actor(hidden).split(self.action_nvec, dim=1)
         else:
             logits = self.actor(hidden)
-            
+
         value = self.critic(hidden)
         return logits, value.squeeze(-1)
