@@ -42,6 +42,7 @@ def evaluate():
     model_path = args.model_path
     if os.path.isdir(model_path):
         import glob
+
         checkpoints = sorted(glob.glob(os.path.join(model_path, "model_*.pt")))
         if not checkpoints:
             print(f"No model checkpoints found in {model_path}")
@@ -50,7 +51,22 @@ def evaluate():
         print(f"Using latest checkpoint: {model_path}")
 
     state_dict = torch.load(model_path, map_location="cpu", weights_only=True)
-    policy.load_state_dict(state_dict)
+
+    # Robust loading: handle 'policy.' prefix and ignore LSTM keys if not RNN
+    new_state_dict = {}
+    for k, v in state_dict.items():
+        if k.startswith("policy."):
+            new_key = k[7:]  # remove 'policy.'
+        else:
+            new_key = k
+
+        # If we are NOT in RNN mode, ignore LSTM keys
+        if not args.rnn and any(x in new_key for x in ["lstm", "cell"]):
+            continue
+
+        new_state_dict[new_key] = v
+
+    policy.load_state_dict(new_state_dict, strict=False)
     policy.eval()
 
     print(
@@ -103,19 +119,19 @@ def evaluate():
             # agent_0 team_score is blue, opponent_score is red.
             blue_score_norm = obs[0, 19]
             red_score_norm = obs[0, 20]
-            
-            # max_score is usually 3 in config.ini but let's be safe and just track 
+
+            # max_score is usually 3 in config.ini but let's be safe and just track
             # if the normalized value changed.
             # Actually, let's just use the raw values if we can guess max_score=3.
             # Or better, just print when it increases.
             new_blue = int(round(blue_score_norm * 3))
             new_red = int(round(red_score_norm * 3))
-            
+
             if new_blue > ep_blue_score:
                 ep_blue_score = new_blue
             if new_red > ep_red_score:
                 ep_red_score = new_red
-            
+
             obs, rewards, terminals, truncations, infos = env.step(actions)
             ep_return += np.sum(rewards)
 
@@ -124,15 +140,16 @@ def evaluate():
                     if isinstance(info_dict, dict):
                         # The C code might report scores in its log
                         if "blue_score" in info_dict:
-                             ep_blue_score = max(ep_blue_score, info_dict["blue_score"])
+                            ep_blue_score = max(ep_blue_score, info_dict["blue_score"])
                         if "red_score" in info_dict:
-                             ep_red_score = max(ep_red_score, info_dict["red_score"])
+                            ep_red_score = max(ep_red_score, info_dict["red_score"])
 
             done = np.any(terminals) or np.any(truncations)
 
             if args.render:
                 env.render()
                 import time
+
                 time.sleep(1 / 30.0)  # ~30 FPS
 
         all_episode_returns.append(ep_return)

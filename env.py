@@ -15,7 +15,7 @@ class RewardWrapper(pufferlib.PufferEnv):
         self.prev_is_tagged = np.zeros(self.num_agents)
         self.step_count = 0
         self._closed = False
-        
+
         # Default reward shaping
         self.reward_shaping = {
             "reward_move_to_enemy": 0.01,
@@ -125,7 +125,9 @@ def make_env(env_name="puffer_ctf", num_envs=1, reward_shaping=None, **kwargs):
     Factory function for environments.
     """
     if env_name == "puffer_ctf":
-        return make_ctf_c_env(num_envs=num_envs, reward_shaping=reward_shaping, **kwargs)
+        return make_ctf_c_env(
+            num_envs=num_envs, reward_shaping=reward_shaping, **kwargs
+        )
     elif env_name == "pyquaticus":
         return make_pyquaticus_env(**kwargs)
     else:

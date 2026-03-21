@@ -25,6 +25,7 @@ class TensorboardLogger:
 def train():
     # Parse CLI arguments
     import sys
+
     resume = "--resume" in sys.argv
     if resume:
         sys.argv.remove("--resume")
@@ -34,7 +35,7 @@ def train():
         idx = sys.argv.index("--config")
         if idx + 1 < len(sys.argv):
             config_file = sys.argv[idx + 1]
-            del sys.argv[idx:idx+2]
+            del sys.argv[idx : idx + 2]
         else:
             print("Error: --config requires a file path")
             sys.exit(1)
@@ -69,6 +70,7 @@ def train():
     # Create environment
     if vec_config.get("num_workers", 1) > 1:
         import pufferlib.vector
+
         backend = vec_config.get("backend", "Multiprocessing")
         if hasattr(pufferlib.vector, backend):
             backend = getattr(pufferlib.vector, backend)
@@ -76,37 +78,42 @@ def train():
             backend = pufferlib.vector.Multiprocessing
 
         envs_per_worker = vec_config["num_envs"] // vec_config["num_workers"]
-        print(f"Creating vectorized environment with {vec_config['num_workers']} workers, {envs_per_worker} envs each")
+        print(
+            f"Creating vectorized environment with {vec_config['num_workers']} workers, {envs_per_worker} envs each"
+        )
         env = pufferlib.vector.make(
             make_env,
             env_kwargs={
-                "env_name": env_name, 
-                "num_envs": 1, 
+                "env_name": env_name,
+                "num_envs": 1,
                 "use_reward_wrapper": use_reward_wrapper,
-                "reward_shaping": reward_shaping
+                "reward_shaping": reward_shaping,
             },
             num_envs=vec_config["num_envs"],
             num_workers=vec_config["num_workers"],
             batch_size=vec_config.get("batch_size", vec_config["num_envs"]),
-            backend=backend
+            backend=backend,
         )
     else:
         env = make_env(
-            env_name, 
-            num_envs=vec_config["num_envs"], 
+            env_name,
+            num_envs=vec_config["num_envs"],
             use_reward_wrapper=use_reward_wrapper,
-            reward_shaping=reward_shaping
+            reward_shaping=reward_shaping,
         )
 
     # Set torch threads to use remaining CPU capacity for the trainer
     # If we have many workers, we should limit this to avoid over-subscription.
     import multiprocessing
+
     total_cores = multiprocessing.cpu_count()
     num_workers = vec_config.get("num_workers", 1)
     # Give the trainer at least 1 thread, but try to use what's left
     num_threads = max(1, total_cores - num_workers)
     torch.set_num_threads(num_threads)
-    print(f"Total cores: {total_cores}, Workers: {num_workers}, Torch threads: {num_threads}")
+    print(
+        f"Total cores: {total_cores}, Workers: {num_workers}, Torch threads: {num_threads}"
+    )
 
     # Create policy
     if train_config.get("use_rnn"):
@@ -123,11 +130,12 @@ def train():
     run_dir = os.path.join(train_config["data_dir"], run_id)
     if not os.path.exists(run_dir):
         os.makedirs(run_dir)
-    
+
     # Check if we should resume
     latest_exp = None
     if resume:
         import glob
+
         exps = sorted(glob.glob(os.path.join(train_config["data_dir"], f"{env_name}*")))
         if exps:
             # Look for the latest experiment that has a trainer_state.pt
@@ -157,7 +165,7 @@ def train():
         logger=logger,
         data_dir=run_dir,
         exp_name="checkpoints",
-        run_name=""
+        run_name="",
     )
 
     # Load checkpoint if resuming
@@ -168,19 +176,27 @@ def train():
             latest_model = model_checkpoints[-1]
             print(f"Loading model checkpoint: {latest_model}")
             # Map location cpu since we are on CPU
-            policy.load_state_dict(torch.load(latest_model, map_location=train_config["device"], weights_only=True))
-            
+            policy.load_state_dict(
+                torch.load(
+                    latest_model, map_location=train_config["device"], weights_only=True
+                )
+            )
+
             # Load trainer state
             trainer_state_path = os.path.join(latest_exp, "trainer_state.pt")
             if os.path.exists(trainer_state_path):
                 print(f"Loading trainer state: {trainer_state_path}")
                 # We need weights_only=False for the full trainer state which has dicts
-                state = torch.load(trainer_state_path, map_location=train_config["device"], weights_only=False)
-                trainer.optimizer.load_state_dict(state['optimizer_state_dict'])
-                trainer.global_step = state['global_step']
+                state = torch.load(
+                    trainer_state_path,
+                    map_location=train_config["device"],
+                    weights_only=False,
+                )
+                trainer.optimizer.load_state_dict(state["optimizer_state_dict"])
+                trainer.global_step = state["global_step"]
                 # PufferRL uses 'update' key for epoch/update number
-                if 'update' in state:
-                    trainer.epoch = state['update']
+                if "update" in state:
+                    trainer.epoch = state["update"]
 
     # Training loop
     print(
@@ -195,6 +211,7 @@ def train():
     except Exception as e:
         print(f"Training crashed: {e}")
         import traceback
+
         traceback.print_exc()
     finally:
         # Finalize
