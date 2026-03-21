@@ -11,9 +11,10 @@ from policy import MLPPolicy
 
 
 class TensorboardLogger:
-    def __init__(self, log_dir):
+    def __init__(self, log_dir, run_id):
         from torch.utils.tensorboard import SummaryWriter
 
+        self.run_id = run_id
         self.writer = SummaryWriter(log_dir)
 
     def log(self, stats, step):
@@ -125,9 +126,16 @@ def train():
 
     policy.to(train_config["device"])
 
-    # Setup Logger
-    run_id = f"{env_name}_{int(time.time())}"
-    run_dir = os.path.join(train_config["data_dir"], run_id)
+    # Setup Logger and Paths
+    # PufferRL expects 'env' and 'data_dir' in config
+    train_config["env"] = env_name
+    if "data_dir" not in train_config or not train_config["data_dir"]:
+        train_config["data_dir"] = "experiments"
+
+    run_id = f"{int(time.time())}"
+    # This will result in experiments/env_name_run_id/
+    run_dir = os.path.join(train_config["data_dir"], f"{env_name}_{run_id}")
+
     if not os.path.exists(run_dir):
         os.makedirs(run_dir)
 
@@ -153,19 +161,16 @@ def train():
 
         logger = WandbLogger(train_config)
     else:
-        # Default to our Tensorboard logger in the same run_dir
-        logger = TensorboardLogger(run_dir)
+        # Default to our Tensorboard logger.
+        # We pass run_id so PuffeRL can find it, and run_dir for the logs.
+        logger = TensorboardLogger(run_dir, run_id)
 
     # Initialize trainer
-    # We set data_dir, exp_name, and run_name to control exactly where files go
     trainer = PuffeRL(
         config=train_config,
         vecenv=env,
         policy=policy,
         logger=logger,
-        data_dir=run_dir,
-        exp_name="checkpoints",
-        run_name="",
     )
 
     # Load checkpoint if resuming
