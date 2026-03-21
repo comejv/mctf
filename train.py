@@ -26,6 +26,12 @@ class TensorboardLogger:
 
 
 def train():
+    # Parse CLI arguments
+    import sys
+    resume = "--resume" in sys.argv
+    if resume:
+        sys.argv.remove("--resume")
+
     # Load config using PufferLib helper
     config = load_config_file("config.ini")
 
@@ -41,7 +47,36 @@ def train():
         os.makedirs(train_config["data_dir"])
 
     # Create environment
-    env = make_env(env_name, num_envs=vec_config["num_envs"], use_reward_wrapper=True)
+    if vec_config.get("num_workers", 1) > 1:
+        import pufferlib.vector
+        backend = vec_config.get("backend", "Multiprocessing")
+        if hasattr(pufferlib.vector, backend):
+            backend = getattr(pufferlib.vector, backend)
+        else:
+            backend = pufferlib.vector.Multiprocessing
+
+        envs_per_worker = vec_config["num_envs"] // vec_config["num_workers"]
+        print(f"Creating vectorized environment with {vec_config['num_workers']} workers, {envs_per_worker} envs each")
+        env = pufferlib.vector.make(
+            make_env,
+            env_kwargs={"env_name": env_name, "num_envs": 1, "use_reward_wrapper": True},
+            num_envs=vec_config["num_envs"],
+            num_workers=vec_config["num_workers"],
+            batch_size=vec_config.get("batch_size", vec_config["num_envs"]),
+            backend=backend
+        )
+    else:
+        env = make_env(env_name, num_envs=vec_config["num_envs"], use_reward_wrapper=True)
+
+    # Set torch threads to use remaining CPU capacity for the trainer
+    # If we have many workers, we should limit this to avoid over-subscription.
+    import multiprocessing
+    total_cores = multiprocessing.cpu_count()
+    num_workers = vec_config.get("num_workers", 1)
+    # Give the trainer at least 1 thread, but try to use what's left
+    num_threads = max(1, total_cores - num_workers)
+    torch.set_num_threads(num_threads)
+    print(f"Total cores: {total_cores}, Workers: {num_workers}, Torch threads: {num_threads}")
 
     # Create policy
     if train_config.get("use_rnn"):
@@ -55,6 +90,23 @@ def train():
 
     # Setup Logger
     run_id = f"{env_name}_{int(time.time())}"
+    
+    # Check if we should resume
+    latest_exp = None
+    if resume:
+        import glob
+        exps = sorted(glob.glob(os.path.join(train_config["data_dir"], f"{env_name}*")))
+        if exps:
+            # Look for the latest experiment that has a trainer_state.pt
+            for exp in reversed(exps):
+                if os.path.exists(os.path.join(exp, "trainer_state.pt")):
+                    latest_exp = exp
+                    # Try to reuse the run_id to keep logs consistent if possible
+                    # but PufferLib might create a new folder anyway.
+                    # For now let's just use the checkpoint.
+                    print(f"Resuming from experiment: {latest_exp}")
+                    break
+
     if config.get("wandb"):
         from pufferlib.pufferl import WandbLogger
 
@@ -66,17 +118,48 @@ def train():
     # Initialize trainer
     trainer = PuffeRL(config=train_config, vecenv=env, policy=policy, logger=logger)
 
+    # Load checkpoint if resuming
+    if latest_exp:
+        # Find latest model checkpoint in that dir
+        model_checkpoints = sorted(glob.glob(os.path.join(latest_exp, "model_*.pt")))
+        if model_checkpoints:
+            latest_model = model_checkpoints[-1]
+            print(f"Loading model checkpoint: {latest_model}")
+            # Map location cpu since we are on CPU
+            policy.load_state_dict(torch.load(latest_model, map_location=train_config["device"], weights_only=True))
+            
+            # Load trainer state
+            trainer_state_path = os.path.join(latest_exp, "trainer_state.pt")
+            if os.path.exists(trainer_state_path):
+                print(f"Loading trainer state: {trainer_state_path}")
+                # We need weights_only=False for the full trainer state which has dicts
+                state = torch.load(trainer_state_path, map_location=train_config["device"], weights_only=False)
+                trainer.optimizer.load_state_dict(state['optimizer_state_dict'])
+                trainer.global_step = state['global_step']
+                # PufferRL uses 'update' key for epoch/update number
+                if 'update' in state:
+                    trainer.epoch = state['update']
+
     # Training loop
     print(
         f"Starting training on {env_name} for {train_config['total_timesteps']} steps..."
     )
-    while trainer.global_step < train_config["total_timesteps"]:
-        trainer.evaluate()
-        trainer.train()
-
-    # Finalize
-    trainer.close()
-    print(f"Model saved via trainer.close()")
+    try:
+        while trainer.global_step < train_config["total_timesteps"]:
+            trainer.evaluate()
+            trainer.train()
+    except KeyboardInterrupt:
+        print("Training interrupted by user")
+    except Exception as e:
+        print(f"Training crashed: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        # Finalize
+        trainer.close()
+        if hasattr(env, "close"):
+            env.close()
+        print(f"Environment closed and model saved.")
 
 
 if __name__ == "__main__":

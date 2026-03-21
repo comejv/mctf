@@ -35,6 +35,8 @@ cd ../APM_5DA01_TP/05-pufferquaticus/
 
 ## Usage
 
+For a detailed guide on the development workflow, see [TRAIN_EVAL_LOOP.md](TRAIN_EVAL_LOOP.md).
+
 ### Monitoring with Tensorboard
 
 This project logs training progress to Tensorboard. To view the logs:

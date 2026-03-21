@@ -15,6 +15,7 @@ def evaluate():
     parser.add_argument("--model-path", type=str, required=True)
     parser.add_argument("--num-episodes", type=int, default=10)
     parser.add_argument("--render", action="store_true")
+    parser.add_argument("--hidden-size", type=int, default=256)
     parser.add_argument(
         "--stochastic",
         action="store_true",
@@ -31,13 +32,24 @@ def evaluate():
     env = make_env(args.env, num_envs=1, use_reward_wrapper=True)
 
     if args.rnn:
-        policy = RecurrentPolicy(env)
+        policy = RecurrentPolicy(env, hidden_size=args.hidden_size)
         is_recurrent = True
     else:
-        policy = MLPPolicy(env)
+        policy = MLPPolicy(env, hidden_size=args.hidden_size)
         is_recurrent = False
 
-    state_dict = torch.load(args.model_path, map_location="cpu")
+    state_dict = None
+    model_path = args.model_path
+    if os.path.isdir(model_path):
+        import glob
+        checkpoints = sorted(glob.glob(os.path.join(model_path, "model_*.pt")))
+        if not checkpoints:
+            print(f"No model checkpoints found in {model_path}")
+            return
+        model_path = checkpoints[-1]
+        print(f"Using latest checkpoint: {model_path}")
+
+    state_dict = torch.load(model_path, map_location="cpu", weights_only=True)
     policy.load_state_dict(state_dict)
     policy.eval()
 
@@ -50,7 +62,9 @@ def evaluate():
     all_red_scores = []
 
     for ep in range(args.num_episodes):
-        obs, info = env.reset()
+        # Use random seed for each episode to see variety
+        seed = int(np.random.randint(0, 1000000))
+        obs, info = env.reset(seed=seed)
         done = False
         ep_return = 0
         ep_blue_score = 0
@@ -66,6 +80,8 @@ def evaluate():
         while not done:
             with torch.no_grad():
                 if is_recurrent:
+                    # pufferlib.models.LSTMWrapper.forward_eval updates state in-place
+                    # but we can also capture it just in case
                     logits, value = policy.forward_eval(torch.as_tensor(obs), state)
                 else:
                     logits, value = policy(torch.as_tensor(obs))
@@ -80,21 +96,44 @@ def evaluate():
                     else:
                         actions = torch.argmax(logits, dim=-1).numpy()
 
+            # The observation at index 19 is 'team_score' and 20 is 'opponent_score'
+            # (normalized by max_score).
+            # Blue team: agents 0, 1. Red team: agents 2, 3.
+            # We can use agent 0's obs to get both.
+            # agent_0 team_score is blue, opponent_score is red.
+            blue_score_norm = obs[0, 19]
+            red_score_norm = obs[0, 20]
+            
+            # max_score is usually 3 in config.ini but let's be safe and just track 
+            # if the normalized value changed.
+            # Actually, let's just use the raw values if we can guess max_score=3.
+            # Or better, just print when it increases.
+            new_blue = int(round(blue_score_norm * 3))
+            new_red = int(round(red_score_norm * 3))
+            
+            if new_blue > ep_blue_score:
+                ep_blue_score = new_blue
+            if new_red > ep_red_score:
+                ep_red_score = new_red
+            
             obs, rewards, terminals, truncations, infos = env.step(actions)
             ep_return += np.sum(rewards)
 
-            if len(infos) > 0:
+            if infos:
                 for info_dict in infos:
-                    if info_dict:
-                        ep_blue_score = max(
-                            ep_blue_score, info_dict.get("blue_score", 0)
-                        )
-                        ep_red_score = max(ep_red_score, info_dict.get("red_score", 0))
+                    if isinstance(info_dict, dict):
+                        # The C code might report scores in its log
+                        if "blue_score" in info_dict:
+                             ep_blue_score = max(ep_blue_score, info_dict["blue_score"])
+                        if "red_score" in info_dict:
+                             ep_red_score = max(ep_red_score, info_dict["red_score"])
 
             done = np.any(terminals) or np.any(truncations)
 
             if args.render:
                 env.render()
+                import time
+                time.sleep(1 / 30.0)  # ~30 FPS
 
         all_episode_returns.append(ep_return)
         all_blue_scores.append(ep_blue_score)

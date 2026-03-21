@@ -4,7 +4,7 @@ import gymnasium
 import numpy as np
 
 
-class RewardWrapper:
+class RewardWrapper(pufferlib.PufferEnv):
     def __init__(self, env):
         self.env = env
         self.num_agents = env.num_agents
@@ -13,18 +13,22 @@ class RewardWrapper:
         self.prev_dist_to_enemy_home = np.zeros(self.num_agents)
         self.prev_dist_to_own_home = np.zeros(self.num_agents)
         self.prev_is_tagged = np.zeros(self.num_agents)
+        self.step_count = 0
+
+    @property
+    def observation_space(self):
+        return self.env.observation_space
+
+    @property
+    def action_space(self):
+        return self.env.action_space
 
     def __getattr__(self, name):
         return getattr(self.env, name)
 
     def step(self, actions):
         obs, rewards, terminals, truncations, infos = self.env.step(actions)
-
-        # obs shape is (num_agents, 45)
-        # indices for 2v2 non-lidar:
-        # 0: opponent_home_bearing, 1: opponent_home_dist
-        # 2: own_home_bearing, 3: own_home_dist
-        # 17: has_flag, 18: on_side, 19: tagging_cooldown, 20: is_tagged
+        self.step_count += 1
 
         new_rewards = rewards.copy().astype(np.float32)
 
@@ -34,9 +38,7 @@ class RewardWrapper:
             has_flag = obs[i, 17]
             is_tagged = obs[i, 20]
 
-            step_count = infos[0].get("step", 0) if len(infos) > 0 else 0
-            if step_count > 1:  # only if not first step
-
+            if self.step_count > 1:  # only if not first step
                 if has_flag == 0:
                     # Reward for moving towards enemy home
                     diff = self.prev_dist_to_enemy_home[i] - dist_to_enemy_home
@@ -68,6 +70,7 @@ class RewardWrapper:
         self.prev_dist_to_enemy_home = obs[:, 1].copy()
         self.prev_dist_to_own_home = obs[:, 3].copy()
         self.prev_is_tagged = obs[:, 20].copy()
+        self.step_count = 0
         return obs, infos
 
     def close(self):

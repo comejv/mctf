@@ -22,8 +22,7 @@ dependencies = [
     "matplotlib",
     "opencv-python-headless",
     "pygame",
-    "setuptools",
-    "pkg-resources",
+    "setuptools<70",
 ]
 
 [tool.uv.sources]
