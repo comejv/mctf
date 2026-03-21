@@ -11,13 +11,10 @@ from policy import MLPPolicy
 
 
 class TensorboardLogger:
-    def __init__(self, config, run_id):
+    def __init__(self, log_dir):
         from torch.utils.tensorboard import SummaryWriter
 
-        self.run_id = run_id
-        self.writer = SummaryWriter(
-            os.path.join(config["data_dir"], f"tensorboard_{run_id}")
-        )
+        self.writer = SummaryWriter(log_dir)
 
     def log(self, stats, step):
         for k, v in stats.items():
@@ -123,6 +120,9 @@ def train():
 
     # Setup Logger
     run_id = f"{env_name}_{int(time.time())}"
+    run_dir = os.path.join(train_config["data_dir"], run_id)
+    if not os.path.exists(run_dir):
+        os.makedirs(run_dir)
     
     # Check if we should resume
     latest_exp = None
@@ -145,11 +145,20 @@ def train():
 
         logger = WandbLogger(train_config)
     else:
-        # Default to our Tensorboard logger
-        logger = TensorboardLogger(train_config, run_id)
+        # Default to our Tensorboard logger in the same run_dir
+        logger = TensorboardLogger(run_dir)
 
     # Initialize trainer
-    trainer = PuffeRL(config=train_config, vecenv=env, policy=policy, logger=logger)
+    # We set data_dir, exp_name, and run_name to control exactly where files go
+    trainer = PuffeRL(
+        config=train_config,
+        vecenv=env,
+        policy=policy,
+        logger=logger,
+        data_dir=run_dir,
+        exp_name="checkpoints",
+        run_name=""
+    )
 
     # Load checkpoint if resuming
     if latest_exp:
