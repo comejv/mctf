@@ -5,7 +5,7 @@ import numpy as np
 
 
 class RewardWrapper(pufferlib.PufferEnv):
-    def __init__(self, env):
+    def __init__(self, env, reward_shaping=None):
         self.env = env
         self.num_agents = env.num_agents
         self.single_observation_space = env.single_observation_space
@@ -14,6 +14,18 @@ class RewardWrapper(pufferlib.PufferEnv):
         self.prev_dist_to_own_home = np.zeros(self.num_agents)
         self.prev_is_tagged = np.zeros(self.num_agents)
         self.step_count = 0
+        self._closed = False
+        
+        # Default reward shaping
+        self.reward_shaping = {
+            "reward_move_to_enemy": 0.01,
+            "reward_move_to_own": 0.05,
+            "reward_flag_hold": 0.01,
+            "penalty_tagged": -0.5,
+            "penalty_step": -0.001,
+        }
+        if reward_shaping:
+            self.reward_shaping.update(reward_shaping)
 
     @property
     def observation_space(self):
@@ -42,24 +54,24 @@ class RewardWrapper(pufferlib.PufferEnv):
                 if has_flag == 0:
                     # Reward for moving towards enemy home
                     diff = self.prev_dist_to_enemy_home[i] - dist_to_enemy_home
-                    new_rewards[i] += diff * 0.01
+                    new_rewards[i] += diff * self.reward_shaping["reward_move_to_enemy"]
                 else:
                     # Reward for moving towards own home
                     diff = self.prev_dist_to_own_home[i] - dist_to_own_home
-                    new_rewards[i] += diff * 0.05  # Higher reward for carrying flag
-                    new_rewards[i] += 0.01  # Bonus for just holding the flag
+                    new_rewards[i] += diff * self.reward_shaping["reward_move_to_own"]
+                    new_rewards[i] += self.reward_shaping["reward_flag_hold"]
 
             self.prev_dist_to_enemy_home[i] = dist_to_enemy_home
             self.prev_dist_to_own_home[i] = dist_to_own_home
 
             # Penalty for being tagged (edge-triggered)
             if is_tagged > 0 and self.prev_is_tagged[i] == 0:
-                new_rewards[i] -= 0.5
+                new_rewards[i] += self.reward_shaping["penalty_tagged"]
 
             self.prev_is_tagged[i] = is_tagged
 
             # Small time penalty
-            new_rewards[i] -= 0.001
+            new_rewards[i] += self.reward_shaping["penalty_step"]
 
         return obs, new_rewards, terminals, truncations, infos
 
@@ -74,10 +86,12 @@ class RewardWrapper(pufferlib.PufferEnv):
         return obs, infos
 
     def close(self):
-        return self.env.close()
+        if not self._closed:
+            self._closed = True
+            return self.env.close()
 
 
-def make_ctf_c_env(num_envs=1, use_reward_wrapper=False, **kwargs):
+def make_ctf_c_env(num_envs=1, use_reward_wrapper=False, reward_shaping=None, **kwargs):
     """
     Creates the fast C implementation of the CTF environment.
     """
@@ -85,7 +99,7 @@ def make_ctf_c_env(num_envs=1, use_reward_wrapper=False, **kwargs):
 
     env = ctf.CTF(num_envs=num_envs, **kwargs)
     if use_reward_wrapper:
-        env = RewardWrapper(env)
+        env = RewardWrapper(env, reward_shaping=reward_shaping)
     return env
 
 
@@ -106,12 +120,12 @@ def make_pyquaticus_env(team_size=2, **kwargs):
     return pufferlib.emulation.PettingZooPufferEnv(env)
 
 
-def make_env(env_name="puffer_ctf", num_envs=1, **kwargs):
+def make_env(env_name="puffer_ctf", num_envs=1, reward_shaping=None, **kwargs):
     """
     Factory function for environments.
     """
     if env_name == "puffer_ctf":
-        return make_ctf_c_env(num_envs=num_envs, **kwargs)
+        return make_ctf_c_env(num_envs=num_envs, reward_shaping=reward_shaping, **kwargs)
     elif env_name == "pyquaticus":
         return make_pyquaticus_env(**kwargs)
     else:

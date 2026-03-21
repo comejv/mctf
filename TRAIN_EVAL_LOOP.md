@@ -82,5 +82,28 @@ tensorboard --logdir experiments/
 ```
 Open [http://localhost:6006](http://localhost:6006) in your browser.
 
-### Performance Log
-Keep track of your experiments in `performance_log.md`. Record the `run_id`, what you changed, and the resulting performance (e.g., win rate or average reward).
+## 6. Reward Rebalancing & Shaping
+
+### Findings on Reward-Averse Behavior
+During initial training, you may notice that **average return climbs toward 0** while **scores drop toward 0**. This is a sign of reward-averse behavior, where agents learn to "do nothing" to avoid penalties.
+-   **Cause**: The tagging penalty (default `-0.5`) and step penalty (`-0.001`) can outweigh the sparse rewards for movement (`0.01`). If moving toward the flag results in a net negative reward per step, agents will stay still.
+-   **Solution**: Increase movement and flag-carrying rewards, or reduce penalties to encourage risk-taking.
+
+### Configuring Rewards
+Reward weights are now configurable directly in your `.ini` files under the `[train]` section.
+
+| Parameter | Default | Description |
+| :--- | :--- | :--- |
+| `reward_move_to_enemy` | `0.01` | Scale for moving towards enemy home (flag). |
+| `reward_move_to_own` | `0.05` | Scale for moving towards own home (with flag). |
+| `reward_flag_hold` | `0.01` | Bonus per step for holding the flag. |
+| `penalty_tagged` | `-0.5` | One-time penalty when tagged. |
+| `penalty_step` | `-0.001` | Penalty per step (to encourage speed). |
+
+Example `config.ini` override:
+```ini
+[train]
+reward_move_to_enemy = 1.0
+reward_move_to_own = 2.0
+penalty_tagged = -0.2
+```

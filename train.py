@@ -32,12 +32,35 @@ def train():
     if resume:
         sys.argv.remove("--resume")
 
+    config_file = "config.ini"
+    if "--config" in sys.argv:
+        idx = sys.argv.index("--config")
+        if idx + 1 < len(sys.argv):
+            config_file = sys.argv[idx + 1]
+            del sys.argv[idx:idx+2]
+        else:
+            print("Error: --config requires a file path")
+            sys.exit(1)
+
     # Load config using PufferLib helper
-    config = load_config_file("config.ini")
+    config = load_config_file(config_file)
+    print(f"Loaded config from {config_file}")
 
     train_config = config["train"]
     vec_config = config["vec"]
     env_name = config["env_name"]
+
+    use_reward_wrapper = train_config.get("use_reward_wrapper", True)
+    hidden_size = train_config.get("hidden_size", 256)
+
+    # Extract reward shaping parameters
+    reward_shaping = {
+        "reward_move_to_enemy": train_config.get("reward_move_to_enemy", 0.01),
+        "reward_move_to_own": train_config.get("reward_move_to_own", 0.05),
+        "reward_flag_hold": train_config.get("reward_flag_hold", 0.01),
+        "penalty_tagged": train_config.get("penalty_tagged", -0.5),
+        "penalty_step": train_config.get("penalty_step", -0.001),
+    }
 
     # Override/Ensure data_dir
     if "data_dir" not in train_config or not train_config["data_dir"]:
@@ -59,14 +82,24 @@ def train():
         print(f"Creating vectorized environment with {vec_config['num_workers']} workers, {envs_per_worker} envs each")
         env = pufferlib.vector.make(
             make_env,
-            env_kwargs={"env_name": env_name, "num_envs": 1, "use_reward_wrapper": True},
+            env_kwargs={
+                "env_name": env_name, 
+                "num_envs": 1, 
+                "use_reward_wrapper": use_reward_wrapper,
+                "reward_shaping": reward_shaping
+            },
             num_envs=vec_config["num_envs"],
             num_workers=vec_config["num_workers"],
             batch_size=vec_config.get("batch_size", vec_config["num_envs"]),
             backend=backend
         )
     else:
-        env = make_env(env_name, num_envs=vec_config["num_envs"], use_reward_wrapper=True)
+        env = make_env(
+            env_name, 
+            num_envs=vec_config["num_envs"], 
+            use_reward_wrapper=use_reward_wrapper,
+            reward_shaping=reward_shaping
+        )
 
     # Set torch threads to use remaining CPU capacity for the trainer
     # If we have many workers, we should limit this to avoid over-subscription.
@@ -82,9 +115,9 @@ def train():
     if train_config.get("use_rnn"):
         from policy import RecurrentPolicy
 
-        policy = RecurrentPolicy(env)
+        policy = RecurrentPolicy(env, hidden_size=hidden_size)
     else:
-        policy = MLPPolicy(env)
+        policy = MLPPolicy(env, hidden_size=hidden_size)
 
     policy.to(train_config["device"])
 
