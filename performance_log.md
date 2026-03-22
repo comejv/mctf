@@ -106,7 +106,17 @@
   - Average Episode Return: `-0.0176` (Stagnant near zero).
   - Blue Score: `0.0` (No captures discovered).
 - **Observation**: Training was extremely stable but too slow. At 10M steps, it had failed to discover any captures. The low learning rate prevents catastrophic forgetting but also makes initial discovery much slower.
-- **Next Step**: Adopt the APM Lab 5 "Fast & Massive" strategy: aggressive learning rate (`0.01`) paired with massive minibatches (`16384`) and revert to the baseline architecture (`hidden_size=256`, `bptt=64`).
+
+## Iteration 9: "Compass" Discovery Strategy
+- **Date**: 2026-03-22
+- **Experiment ID**: `puffer_ctf_1774207091`
+- **Total Timesteps**: 100,000,000 (Ongoing)
+- **Configuration**: LSTM, `hidden_size = 128`, `learning_rate = 0.002`, `gamma = 0.999`, `ent_coef = 0.05`, `reward_move_to_enemy = 0.2`, `reward_move_to_own = 0.4`, `penalty_step = 0.0`.
+- **Results at 12.3M steps**: 
+  - Average Episode Return: `-0.0020` (Recovered from -1.35).
+  - Blue Score: Sporadic hits of `0.0078`, indicating discovery.
+- **Observation**: The stronger, unclamped "Compass" rewards are working. The agents have learned to navigate towards the enemy home and have successfully discovered the capture sequence several times. The high gamma (0.999) is helping value the long-term capture reward.
+- **Next Step**: Continue training to 100M steps to stabilize the learned capture behavior.
 
 
 

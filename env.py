@@ -4,15 +4,17 @@ import gymnasium
 import numpy as np
 
 
-def make_ctf_c_env(num_envs=1, use_reward_wrapper=False, reward_shaping=None, **kwargs):
+def make_ctf_c_env(num_envs=1, reward_shaping=None, **kwargs):
     """
     Creates the fast C implementation of the CTF environment.
+    Reward shaping is handled natively in the C backend.
     """
     from pufferlib.ocean.ctf import ctf
     
     if reward_shaping is None:
         reward_shaping = {}
         
+    # These values are passed directly to the C engine
     env = ctf.CTF(
         num_envs=num_envs, 
         reward_move_to_enemy=reward_shaping.get("reward_move_to_enemy", 0.01),

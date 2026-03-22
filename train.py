@@ -88,7 +88,6 @@ def train():
             env_kwargs={
                 "env_name": env_name,
                 "num_envs": 1,
-                "use_reward_wrapper": use_reward_wrapper,
                 "reward_shaping": reward_shaping,
             },
             num_envs=vec_config["num_envs"],
@@ -100,7 +99,6 @@ def train():
         env = make_env(
             env_name,
             num_envs=vec_config["num_envs"],
-            use_reward_wrapper=use_reward_wrapper,
             reward_shaping=reward_shaping,
         )
 

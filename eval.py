@@ -29,7 +29,7 @@ def evaluate():
     args, unknown = parser.parse_known_args()
 
     # Create one environment for evaluation
-    env = make_env(args.env, num_envs=1, use_reward_wrapper=True)
+    env = make_env(args.env, num_envs=1)
 
     if args.rnn:
         policy = RecurrentPolicy(env, hidden_size=args.hidden_size)
