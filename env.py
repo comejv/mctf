@@ -23,6 +23,7 @@ class RewardWrapper(pufferlib.PufferEnv):
             "reward_flag_hold": 0.01,
             "penalty_tagged": -0.5,
             "penalty_step": -0.001,
+            "penalty_wall": 0.0,
         }
         if reward_shaping:
             self.reward_shaping.update(reward_shaping)
@@ -47,15 +48,15 @@ class RewardWrapper(pufferlib.PufferEnv):
         for i in range(self.num_agents):
             dist_to_enemy_home = obs[i, 1]
             dist_to_own_home = obs[i, 3]
-            has_flag = obs[i, 17]
-            is_tagged = obs[i, 20]
+            has_flag = obs[i, 15]  # Index 15: 1.0 if true, -1.0 if false
+            is_tagged = obs[i, 18] # Index 18: 1.0 if true, -1.0 if false
 
             if self.step_count > 1:  # only if not first step
-                if has_flag == 0:
+                if has_flag < 0:  # Doesn't have flag (-1.0)
                     # Reward for moving towards enemy home
                     diff = self.prev_dist_to_enemy_home[i] - dist_to_enemy_home
                     new_rewards[i] += diff * self.reward_shaping["reward_move_to_enemy"]
-                else:
+                else:  # Has flag (1.0)
                     # Reward for moving towards own home
                     diff = self.prev_dist_to_own_home[i] - dist_to_own_home
                     new_rewards[i] += diff * self.reward_shaping["reward_move_to_own"]
@@ -65,10 +66,17 @@ class RewardWrapper(pufferlib.PufferEnv):
             self.prev_dist_to_own_home[i] = dist_to_own_home
 
             # Penalty for being tagged (edge-triggered)
-            if is_tagged > 0 and self.prev_is_tagged[i] == 0:
+            if is_tagged > 0 and self.prev_is_tagged[i] < 0:
                 new_rewards[i] += self.reward_shaping["penalty_tagged"]
 
             self.prev_is_tagged[i] = is_tagged
+
+            # Penalty for wall hugging (continuous)
+            # Wall distances are at indices 5, 7, 9, 11 (normalized by env diagonal ~111)
+            # If distance is < 0.02, they are within ~2 units of a wall
+            min_wall_dist = min(obs[i, 5], obs[i, 7], obs[i, 9], obs[i, 11])
+            if min_wall_dist < 0.02:
+                new_rewards[i] += self.reward_shaping.get("penalty_wall", 0.0)
 
             # Small time penalty
             new_rewards[i] += self.reward_shaping["penalty_step"]
@@ -81,7 +89,7 @@ class RewardWrapper(pufferlib.PufferEnv):
         obs, infos = self.env.reset(seed=seed)
         self.prev_dist_to_enemy_home = obs[:, 1].copy()
         self.prev_dist_to_own_home = obs[:, 3].copy()
-        self.prev_is_tagged = obs[:, 20].copy()
+        self.prev_is_tagged = obs[:, 18].copy()
         self.step_count = 0
         return obs, infos
 

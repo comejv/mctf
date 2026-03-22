@@ -59,6 +59,7 @@ def train():
         "reward_flag_hold": train_config.get("reward_flag_hold", 0.01),
         "penalty_tagged": train_config.get("penalty_tagged", -0.5),
         "penalty_step": train_config.get("penalty_step", -0.001),
+        "penalty_wall": train_config.get("penalty_wall", 0.0),
     }
 
     # Override/Ensure data_dir
@@ -104,17 +105,18 @@ def train():
         )
 
     # Set torch threads to use remaining CPU capacity for the trainer
-    # If we have many workers, we should limit this to avoid over-subscription.
     import multiprocessing
-
     total_cores = multiprocessing.cpu_count()
     num_workers = vec_config.get("num_workers", 1)
-    # Give the trainer at least 1 thread, but try to use what's left
-    num_threads = max(1, total_cores - num_workers)
+    
+    # If we have many workers, the trainer should use fewer threads to avoid context switching
+    if num_workers >= total_cores:
+        num_threads = 1
+    else:
+        num_threads = max(1, total_cores - num_workers)
+        
     torch.set_num_threads(num_threads)
-    print(
-        f"Total cores: {total_cores}, Workers: {num_workers}, Torch threads: {num_threads}"
-    )
+    print(f"Total cores: {total_cores}, Workers: {num_workers}, Torch threads: {num_threads}")
 
     # Create policy
     if train_config.get("use_rnn"):
