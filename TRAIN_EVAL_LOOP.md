@@ -89,16 +89,35 @@ During initial training, you may notice that **average return climbs toward 0** 
 -   **Cause**: The tagging penalty (default `-0.5`) and step penalty (`-0.001`) can outweigh the sparse rewards for movement (`0.01`). If moving toward the flag results in a net negative reward per step, agents will stay still.
 -   **Solution**: Increase movement and flag-carrying rewards, or reduce penalties to encourage risk-taking.
 
-### Configuring Rewards
-Reward weights are now configurable directly in your `.ini` files under the `[train]` section.
+### Key Configuration Parameters
+All parameters can be set directly in your `.ini` files under the `[train]` section, or overridden via the CLI.
 
+#### Reward Shaping & Environment
 | Parameter | Default | Description |
 | :--- | :--- | :--- |
+| `use_reward_wrapper` | `True` | Whether to apply the reward shaping wrapper. |
 | `reward_move_to_enemy` | `0.01` | Scale for moving towards enemy home (flag). |
 | `reward_move_to_own` | `0.05` | Scale for moving towards own home (with flag). |
 | `reward_flag_hold` | `0.01` | Bonus per step for holding the flag. |
 | `penalty_tagged` | `-0.5` | One-time penalty when tagged. |
 | `penalty_step` | `-0.001` | Penalty per step (to encourage speed). |
+| `penalty_wall` | `0.0` | Penalty per step for colliding with walls/obstacles. |
+
+#### Policy & PPO Hyperparameters
+| Parameter | Default | Description |
+| :--- | :--- | :--- |
+| `use_rnn` | `True` | Whether to use a Recurrent Policy (LSTM) or standard MLP. |
+| `hidden_size` | `256` | Size of the hidden layers in the policy network. |
+| `bptt_horizon` | `64` | Backpropagation Through Time horizon for the LSTM. |
+| `total_timesteps` | `100_000_000`| Total environment steps to train for. |
+| `learning_rate` | `0.005` | Step size for the optimizer. |
+| `ent_coef` | `0.01` | Entropy coefficient to encourage exploration. |
+| `gamma` | `0.995` | Discount factor for future rewards. |
+| `batch_size` | `auto` | Overall batch size for PPO updates. |
+| `minibatch_size` | `1024` | Size of mini-batches during PPO optimization. |
+
+### Note on Policy Collapse (LSTM)
+When training with LSTMs, the policy can sometimes "collapse" early, where entropy drops quickly to near 0 and agents learn only to avoid penalties (staying still). If you see `episode_return` climb to 0 but `score` remain 0, try increasing `ent_coef` (e.g., to `0.1` or `0.2`) to force exploration.
 
 Example `config.ini` override:
 ```ini
@@ -106,4 +125,5 @@ Example `config.ini` override:
 reward_move_to_enemy = 1.0
 reward_move_to_own = 2.0
 penalty_tagged = -0.2
+ent_coef = 0.2
 ```

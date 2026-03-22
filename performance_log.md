@@ -74,3 +74,39 @@
 - Fixed `env.py` to use correct indices (`has_flag`=15, `is_tagged`=18).
 - Ready for a true "Tabula Rasa" run with the fixed reward wrapper.
 
+## Iteration 6: Post-Fix High Entropy Run
+- **Date**: 2026-03-22
+- **Experiment ID**: `puffer_ctf_1774194424`
+- **Environment**: `puffer_ctf`
+- **Total Timesteps**: 20,000,000
+- **Configuration**: LSTM, `ent_coef = 0.1`, `learning_rate = 0.001`, `reward_move_to_enemy = 1.0`, `reward_move_to_own = 2.0`.
+- **Results**: Average Episode Return: -18.50, Scores 0-0.
+- **Observation**: The entropy coefficient (`0.1`) was far too high, leading to policy collapse where agents completely failed to learn any coherent behavior. The return was deeply negative, implying they continuously received penalties (likely from step penalties or getting tagged) without successfully exploiting the aggressive reward shaping.
+- **Next Step**: Start a new run with `ent_coef = 0.01` (standard PPO), a lower learning rate (`0.0005`), and more balanced rewards (`0.1` for moving) to encourage stable learning.
+
+## Iteration 7: High Reactivity (Smaller Network, High LR)
+- **Date**: 2026-03-22
+- **Experiment ID**: `puffer_ctf_1774198595`
+- **Total Timesteps**: 20,000,000
+- **Configuration**: LSTM, `hidden_size = 128`, `bptt_horizon = 32`, `batch_size = auto (16384)`, `learning_rate = 0.005`, `ent_coef = 0.05`.
+- **Results**: 
+  - Peak Blue Score: `0.2063` (at ~11.7M steps).
+  - Final Blue Score: Crashed back to `0.0` to `0.07`.
+  - Average Episode Return: Highly volatile (between -0.5 and +0.25).
+- **Observation**: The massive learning rate and smaller network successfully allowed the agents to break the zero-score plateau and discover flag captures! However, due to the high learning rate and policy churn (catastrophic forgetting), the policy quickly collapsed and lost the behavior.
+- **Render Eval Observation**: Visual evaluation of the final checkpoints revealed that agents learned a degenerate policy of simply spinning in place and doing nothing, likely to avoid movement penalties or collisions after forgetting the capture sequence.
+- **Next Step**: Retain the smaller network (`128`) and BPTT (`32`) which proved capable of learning, but lower the learning rate (`0.001`) and ensure a large batch size to stabilize the gradients and prevent forgetting. We should also remove the step penalty so they don't learn to spin in place to avoid accumulating negative rewards over time.
+
+## Iteration 8: Stabilization Run (Low LR + Large Batch)
+- **Date**: 2026-03-22
+- **Experiment ID**: `puffer_ctf_1774199635`
+- **Total Timesteps**: 20,000,000 (Interrupted at 10M)
+- **Configuration**: LSTM, `hidden_size = 128`, `learning_rate = 0.001`, `batch_size = 16384`, `penalty_step = 0.0`.
+- **Results**: 
+  - Average Episode Return: `-0.0176` (Stagnant near zero).
+  - Blue Score: `0.0` (No captures discovered).
+- **Observation**: Training was extremely stable but too slow. At 10M steps, it had failed to discover any captures. The low learning rate prevents catastrophic forgetting but also makes initial discovery much slower.
+- **Next Step**: Adopt the APM Lab 5 "Fast & Massive" strategy: aggressive learning rate (`0.01`) paired with massive minibatches (`16384`) and revert to the baseline architecture (`hidden_size=256`, `bptt=64`).
+
+
+

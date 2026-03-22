@@ -223,8 +223,6 @@ def train():
     finally:
         # Finalize
         trainer.close()
-        if hasattr(env, "close"):
-            env.close()
         print(f"Environment closed and model saved.")
 
 
